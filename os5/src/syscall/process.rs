@@ -4,7 +4,7 @@ use crate::loader::get_app_data_by_name;
 use crate::mm::{translated_refmut, translated_str};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next,
-    suspend_current_and_run_next, TaskStatus,
+    suspend_current_and_run_next, TaskStatus, set_priority
 };
 use crate::timer::get_time_us;
 use alloc::sync::Arc;
@@ -123,8 +123,9 @@ pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
 }
 
 // YOUR JOB: 实现sys_set_priority，为任务添加优先级
-pub fn sys_set_priority(_prio: isize) -> isize {
-    -1
+pub fn sys_set_priority(prio: isize) -> isize {
+    let current_task = current_task().unwrap();
+    set_priority(&current_task, prio)
 }
 
 // YOUR JOB: 扩展内核以实现 sys_mmap 和 sys_munmap

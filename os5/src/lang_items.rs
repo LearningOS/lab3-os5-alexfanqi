@@ -4,6 +4,7 @@ use crate::console::ANSICON;
 use crate::sbi::shutdown;
 
 use core::panic::PanicInfo;
+use core::{arch::asm, ptr};
 
 #[panic_handler]
 /// panic handler

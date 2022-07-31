@@ -2,6 +2,7 @@
 
 use super::TaskContext;
 use super::{pid_alloc, KernelStack, PidHandle};
+use super::manager::Pass;
 use crate::config::TRAP_CONTEXT;
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
@@ -44,6 +45,9 @@ pub struct TaskControlBlockInner {
     pub parent: Option<Weak<TaskControlBlock>>,
     /// A vector containing TCBs of all child processes of the current process
     pub children: Vec<Arc<TaskControlBlock>>,
+    pub priority: isize,
+    /// for stride scheduling
+    pub pass: Pass,
     /// It is set when active exit or execution error occurs
     pub exit_code: i32,
 }
@@ -102,6 +106,8 @@ impl TaskControlBlock {
                     memory_set,
                     parent: None,
                     children: Vec::new(),
+                    priority: 16,
+                    pass: Pass::new(),
                     exit_code: 0,
                 })
             },
@@ -169,6 +175,8 @@ impl TaskControlBlock {
                     memory_set,
                     parent: Some(Arc::downgrade(self)),
                     children: Vec::new(),
+                    priority: parent_inner.priority,
+                    pass: parent_inner.pass,
                     exit_code: 0,
                 })
             },
@@ -181,8 +189,6 @@ impl TaskControlBlock {
         trap_cx.kernel_sp = kernel_stack_top;
         // return
         task_control_block
-        // ---- release parent PCB automatically
-        // **** release children PCB automatically
     }
     pub fn spawn(self: &Arc<TaskControlBlock>, elf_data: &[u8]) -> Arc<TaskControlBlock> {
         let mut parent_inner = self.inner_exclusive_access();
@@ -201,6 +207,8 @@ impl TaskControlBlock {
                     memory_set: MemorySet::new_bare(),
                     parent: Some(Arc::downgrade(self)),
                     children: Vec::new(),
+                    priority: parent_inner.priority,
+                    pass: parent_inner.pass,
                     exit_code: 0,
                 })
             },
@@ -208,7 +216,8 @@ impl TaskControlBlock {
         // add child
         parent_inner.children.push(task_control_block.clone());
         // reuse exec to complete the task creation
-        self.exec(elf_data);
+        task_control_block.exec(elf_data);
+        info!("exec done");
         task_control_block
     }
     pub fn getpid(&self) -> usize {
