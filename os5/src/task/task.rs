@@ -184,6 +184,33 @@ impl TaskControlBlock {
         // ---- release parent PCB automatically
         // **** release children PCB automatically
     }
+    pub fn spawn(self: &Arc<TaskControlBlock>, elf_data: &[u8]) -> Arc<TaskControlBlock> {
+        let mut parent_inner = self.inner_exclusive_access();
+        let pid_handle = pid_alloc();
+        let kernel_stack = KernelStack::new(&pid_handle);
+        // create a partially valid TCB
+        let task_control_block = Arc::new(TaskControlBlock {
+            pid: pid_handle,
+            kernel_stack,
+            inner: unsafe {
+                UPSafeCell::new(TaskControlBlockInner {
+                    trap_cx_ppn: PhysPageNum::from(0),
+                    base_size: parent_inner.base_size,
+                    task_cx: TaskContext::zero_init(),
+                    task_status: TaskStatus::Ready,
+                    memory_set: MemorySet::new_bare(),
+                    parent: Some(Arc::downgrade(self)),
+                    children: Vec::new(),
+                    exit_code: 0,
+                })
+            },
+        });
+        // add child
+        parent_inner.children.push(task_control_block.clone());
+        // reuse exec to complete the task creation
+        self.exec(elf_data);
+        task_control_block
+    }
     pub fn getpid(&self) -> usize {
         self.pid.0
     }
