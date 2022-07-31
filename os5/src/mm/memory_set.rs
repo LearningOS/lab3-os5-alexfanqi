@@ -59,6 +59,15 @@ impl MemorySet {
             None,
         );
     }
+    pub fn has_conflict_with_range(
+        & self,
+        start_va: VirtAddr,
+        end_va: VirtAddr
+    ) -> bool {
+        self.areas.iter().find(|&area|{
+            area.has_conflict_with_range(start_va, end_va)
+        }).is_some()
+    }
     pub fn remove_area_with_start_vpn(&mut self, start_vpn: VirtPageNum) {
         if let Some((idx, area)) = self
             .areas
@@ -69,6 +78,23 @@ impl MemorySet {
             area.unmap(&mut self.page_table);
             self.areas.remove(idx);
         }
+    }
+        pub fn unmap_area_exact_range(
+        &mut self,
+        start_vn: VirtPageNum,
+        end_vn: VirtPageNum
+    ) -> isize {
+        for i in 0..self.areas.len(){
+            let area = &mut self.areas[i];
+            let vrange = area.vpn_range;
+            if start_vn == vrange.get_start() &&
+            end_vn == vrange.get_end() {
+                area.unmap(&mut self.page_table);
+                self.areas.swap_remove(i);
+                return 0;
+            }
+        }
+        -1
     }
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
         map_area.map(&mut self.page_table);
@@ -343,6 +369,16 @@ impl MapArea {
             }
             current_vpn.step();
         }
+    }
+
+    pub fn has_conflict_with_range(
+        & self,
+        start_va: VirtAddr,
+        end_va: VirtAddr
+    ) -> bool {
+        let self_start: VirtAddr = self.vpn_range.get_start().into();
+        let self_end: VirtAddr = self.vpn_range.get_end().into();
+        start_va < self_end && end_va > self_start 
     }
 }
 

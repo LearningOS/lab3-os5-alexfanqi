@@ -1,7 +1,10 @@
 //! Process management syscalls
 
 use crate::loader::get_app_data_by_name;
-use crate::mm::{translated_refmut, translated_str};
+use crate::mm::{
+    translated_refmut, translated_str, translated_large_type, 
+    copy_type_into_bufs, mmap, munmap, VirtAddr,
+};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next,
     suspend_current_and_run_next, TaskStatus, set_priority
@@ -106,20 +109,33 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
 }
 
 // YOUR JOB: 引入虚地址后重写 sys_get_time
-pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
-    let _us = get_time_us();
-    // unsafe {
-    //     *ts = TimeVal {
-    //         sec: us / 1_000_000,
-    //         usec: us % 1_000_000,
-    //     };
-    // }
+pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
+    let us = get_time_us();
+    let bufs = translated_large_type::<TimeVal>(current_user_token(), ts);
+    unsafe {
+        copy_type_into_bufs::<TimeVal>(
+            &TimeVal {
+            sec: us / 1_000_000,
+            usec: us % 1_000_000,    
+            },
+            bufs);
+    }
     0
 }
 
 // YOUR JOB: 引入虚地址后重写 sys_task_info
 pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
-    -1
+    let task = current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+    let mut ti_tmp = TaskInfo {
+        status: inner.task_status,
+        syscall_times: [0; MAX_SYSCALL_NUM],
+        time: (get_time_us()-inner.start_time)/1000,
+    };
+    ti_tmp.syscall_times.clone_from_slice(&inner.syscall_stats);
+    let bufs = translated_large_type::<TaskInfo>(current_user_token(), ti);
+    unsafe{ copy_type_into_bufs::<TaskInfo>(&ti_tmp, bufs); };
+    0
 }
 
 // YOUR JOB: 实现sys_set_priority，为任务添加优先级
@@ -134,12 +150,30 @@ pub fn sys_set_priority(prio: isize) -> isize {
 }
 
 // YOUR JOB: 扩展内核以实现 sys_mmap 和 sys_munmap
-pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    -1
+pub fn sys_mmap(start: usize, len: usize, prot: usize) -> isize {
+    let vstart = VirtAddr::from(start);
+    if ! vstart.aligned() || prot & !0x7 != 0 || prot & 0x7 == 0 {
+        return -1;
+    }
+    if len == 0 {
+        return 0;
+    }
+    
+    let vend = VirtAddr::from(start+len);
+    mmap(vstart, vend, prot)
 }
 
-pub fn sys_munmap(_start: usize, _len: usize) -> isize {
-    -1
+pub fn sys_munmap(start: usize, len: usize) -> isize {
+    let vstart = VirtAddr::from(start);
+    if ! vstart.aligned() {
+        return -1;
+    }
+    if len == 0 {
+        return 0;
+    }
+
+    let vend = VirtAddr::from(usize::from(vstart)+len);
+    munmap(vstart, vend)
 }
 
 //

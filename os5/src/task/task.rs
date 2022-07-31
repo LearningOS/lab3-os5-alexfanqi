@@ -3,7 +3,7 @@
 use super::TaskContext;
 use super::{pid_alloc, KernelStack, PidHandle};
 use super::manager::Pass;
-use crate::config::TRAP_CONTEXT;
+use crate::config::{TRAP_CONTEXT, MAX_SYSCALL_NUM};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
@@ -38,6 +38,8 @@ pub struct TaskControlBlockInner {
     pub task_cx: TaskContext,
     /// Maintain the execution status of the current process
     pub task_status: TaskStatus,
+    pub start_time: usize,
+    pub syscall_stats: [u32; MAX_SYSCALL_NUM],
     /// Application address space
     pub memory_set: MemorySet,
     /// Parent process of the current process.
@@ -103,6 +105,8 @@ impl TaskControlBlock {
                     base_size: user_sp,
                     task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                     task_status: TaskStatus::Ready,
+                    start_time: 0,
+                    syscall_stats: [0; MAX_SYSCALL_NUM],
                     memory_set,
                     parent: None,
                     children: Vec::new(),
@@ -172,6 +176,8 @@ impl TaskControlBlock {
                     base_size: parent_inner.base_size,
                     task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                     task_status: TaskStatus::Ready,
+                    start_time: 0,
+                    syscall_stats: [0; MAX_SYSCALL_NUM],
                     memory_set,
                     parent: Some(Arc::downgrade(self)),
                     children: Vec::new(),
@@ -205,6 +211,8 @@ impl TaskControlBlock {
                     base_size: parent_inner.base_size,
                     task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                     task_status: TaskStatus::Ready,
+                    start_time: 0,
+                    syscall_stats: [0; MAX_SYSCALL_NUM],
                     memory_set: MemorySet::new_bare(),
                     parent: Some(Arc::downgrade(self)),
                     children: Vec::new(),

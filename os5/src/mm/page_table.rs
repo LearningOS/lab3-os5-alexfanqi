@@ -5,6 +5,8 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
+use core::mem::size_of;
+use core::slice::from_raw_parts;
 
 bitflags! {
     /// page table entry flags
@@ -195,4 +197,22 @@ pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
         .translate_va(VirtAddr::from(va))
         .unwrap()
         .get_mut()
+}
+
+/// for type so large that spans multiple pages
+/// or even trickier, small type that cross border between 2 pages, unlikely
+pub fn translated_large_type<T>(token: usize, ptr: *const T) -> Vec<& 'static mut [u8]> {
+    let ptr = ptr as *const u8;
+    let size = size_of::<T>();
+    translated_byte_buffer(token, ptr, size)
+}
+
+pub unsafe fn copy_type_into_bufs<T>(value: &T, buffers: Vec<&mut [u8]>) {
+    let value = from_raw_parts(value as *const T as *const u8, size_of::<T>());
+    let mut offset = 0;
+    for buffer in buffers {
+        let dst_len = buffer.len();    
+        buffer.copy_from_slice(&value[offset..offset+dst_len]);
+        offset += dst_len;
+    }
 }
