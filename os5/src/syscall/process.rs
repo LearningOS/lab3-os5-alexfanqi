@@ -125,7 +125,12 @@ pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
 // YOUR JOB: 实现sys_set_priority，为任务添加优先级
 pub fn sys_set_priority(prio: isize) -> isize {
     let current_task = current_task().unwrap();
-    set_priority(&current_task, prio)
+    if set_priority(&current_task, prio) == 0 {
+        prio
+    }
+    else {
+        -1
+    }
 }
 
 // YOUR JOB: 扩展内核以实现 sys_mmap 和 sys_munmap

@@ -194,6 +194,7 @@ impl TaskControlBlock {
         let mut parent_inner = self.inner_exclusive_access();
         let pid_handle = pid_alloc();
         let kernel_stack = KernelStack::new(&pid_handle);
+        let kernel_stack_top = kernel_stack.get_top();
         // create a partially valid TCB
         let task_control_block = Arc::new(TaskControlBlock {
             pid: pid_handle,
@@ -202,7 +203,7 @@ impl TaskControlBlock {
                 UPSafeCell::new(TaskControlBlockInner {
                     trap_cx_ppn: PhysPageNum::from(0),
                     base_size: parent_inner.base_size,
-                    task_cx: TaskContext::zero_init(),
+                    task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                     task_status: TaskStatus::Ready,
                     memory_set: MemorySet::new_bare(),
                     parent: Some(Arc::downgrade(self)),
