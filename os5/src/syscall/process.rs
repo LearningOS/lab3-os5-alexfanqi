@@ -125,6 +125,7 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
 
 // YOUR JOB: 引入虚地址后重写 sys_task_info
 pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
+    let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
     let mut ti_tmp = TaskInfo {
@@ -133,7 +134,7 @@ pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
         time: (get_time_us()-inner.start_time)/1000,
     };
     ti_tmp.syscall_times.clone_from_slice(&inner.syscall_stats);
-    let bufs = translated_large_type::<TaskInfo>(current_user_token(), ti);
+    let bufs = translated_large_type::<TaskInfo>(token, ti);
     unsafe{ copy_type_into_bufs::<TaskInfo>(&ti_tmp, bufs); };
     0
 }
